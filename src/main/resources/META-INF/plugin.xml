@@ -1,18 +1,32 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.woniu9524.codeaskjb</id>
-    <name>codeask-jb</name>
+    <name>CodeAsk</name>
     <vendor>woniu9524</vendor>
+    <description><![CDATA[
+        代码解释插件，自动加载和显示项目中代码文件的解释信息。
+        <ul>
+            <li>支持从.codeaskdata文件加载代码解释数据</li>
+            <li>自动识别当前编辑文件</li>
+            <li>多标签页展示不同类型的解释</li>
+            <li>一键复制和刷新解释内容</li>
+        </ul>
+    ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
 
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.woniu9524.codeaskjb.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
+        <toolWindow id="CodeAsk" 
+                    anchor="right"
+                    factoryClass="com.github.woniu9524.codeaskjb.toolWindow.CodeAskToolWindowFactory"
+                    icon="/icons/codeask.svg"/>
+        <projectService serviceImplementation="com.github.woniu9524.codeaskjb.services.CodeAskDataService"/>
     </extensions>
 
     <applicationListeners>
-        <listener class="com.github.woniu9524.codeaskjb.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+        <listener class="com.github.woniu9524.codeaskjb.listeners.CodeAskFileEditorListener" 
+                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
     </applicationListeners>
 </idea-plugin>
