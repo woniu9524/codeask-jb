@@ -29,8 +29,8 @@ class MarkdownRenderer {
         private val renderCache = ConcurrentHashMap<String, String>()
 
         // 正则表达式预编译
-        private val mermaidRegex = "```mermaid\n([\\s\\S]*?)\n```".toRegex()
-        private val codeBlockRegex = "```(\\w*)\n([\\s\\S]*?)\n```".toRegex()
+        private val mermaidRegex = "```mermaid\n?([\\s\\S]*?)\n?```".toRegex()
+        private val codeBlockRegex = "```([\\w]*)(?:\\s*\n)([\\s\\S]*?)\n?```".toRegex()
         private val inlineCodeRegex = "`([^`]+)`".toRegex()
         private val headerRegex = "^\\s*(#{1,6})\\s+(.+)$".toRegex(RegexOption.MULTILINE)
         private val boldRegex = "\\*\\*([^*]+)\\*\\*".toRegex()
@@ -70,7 +70,11 @@ class MarkdownRenderer {
                 return renderCache[cacheKey]!!
             }
 
-            val htmlText = parseMarkdown(text)
+            // 预处理文本，确保代码块格式正确
+            val sanitizedText = sanitizeMarkdown(text)
+            val processedText = preprocessMarkdown(sanitizedText)
+            
+            val htmlText = parseMarkdown(processedText)
             val result = wrapHtml(htmlText, includeMermaid)
 
             // 添加到缓存
@@ -96,44 +100,111 @@ class MarkdownRenderer {
         }
 
         /**
-         * 处理内联代码文本，移除括号内容
+         * 清理Markdown文本，移除可能导致渲染问题的内容
          */
-        private fun preprocessCodeText(code: String): String {
-            // 移除括号及其内容的正则表达式
-            val bracketsContentRegex = "\\([^)]*\\)".toRegex()
-            return code.replace(bracketsContentRegex, "").trim()
+        private fun sanitizeMarkdown(text: String): String {
+            var result = text
+            
+            // 1. 移除可能的HTML注释
+            result = result.replace("<!--[\\s\\S]*?-->".toRegex(), "")
+            
+            // 2. 移除不可见的控制字符
+            result = result.replace("[\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F]".toRegex(), "")
+            
+            // 3. 修复不平衡的代码块标记
+            var count = 0
+            result.forEach { if (it == '`') count++ }
+            if (count % 2 != 0) {
+                result += "`" // 添加一个反引号以平衡
+            }
+            
+            // 4. 确保文本以换行符结束
+            if (!result.endsWith("\n")) {
+                result += "\n"
+            }
+            
+            return result
+        }
+
+        /**
+         * 预处理Markdown文本，修复可能的格式问题
+         */
+        private fun preprocessMarkdown(text: String): String {
+            var result = text
+            
+            // 1. 移除连续的```标记，可能是由于错误格式导致的
+            result = result.replace("```\\s*```".toRegex(), "")
+            
+            // 2. 移除只包含空白字符的代码块
+            result = result.replace("```(\\w*)[\\s\\n]*```".toRegex(), "")
+            
+            // 3. 确保代码块格式正确（开始标记后有换行，结束标记前有换行）
+            result = result.replace("```(\\w*)([^\\n])".toRegex()) {
+                "```${it.groupValues[1]}\n${it.groupValues[2]}"
+            }
+            result = result.replace("([^\\n])```".toRegex()) {
+                "${it.groupValues[1]}\n```"
+            }
+            
+            // 4. 修复没有结束标记的代码块
+            result = result.replace("```(\\w*)(\\s*[^`]*?)$".toRegex()) {
+                "```${it.groupValues[1]}${it.groupValues[2]}\n```"
+            }
+            
+            // 5. 处理特殊情况：移除可能导致问题的控制字符
+            result = result.replace("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]".toRegex(), "")
+            
+            return result
         }
 
         /**
          * 解析Markdown文本为HTML
          */
         private fun parseMarkdown(text: String): String {
-            // 处理Mermaid图表 (```mermaid ... ```)
-            var htmlText = mermaidRegex.replace(text) { matchResult ->
+            // 使用SimpleMarkdownParser处理文本，防止嵌套和复杂的格式问题
+            val processedText = text
+            
+            // 处理代码块，确保它们全部被正确处理
+            // 我们使用一个简单的方法：先用占位符替换所有代码块，处理其他Markdown元素后再替换回来
+            val codeBlocks = mutableListOf<String>()
+            val placeholderRegex = "CODE_BLOCK_PLACEHOLDER_(\\d+)".toRegex()
+            
+            // 替换代码块为占位符
+            var tempText = processedText.replace(codeBlockRegex) { matchResult ->
+                val language = matchResult.groupValues[1].trim()
+                val code = matchResult.groupValues[2].trim()
+                
+                // 跳过空代码块
+                if (code.isBlank()) {
+                    return@replace ""
+                }
+                
+                val index = codeBlocks.size
+                val placeholder = "CODE_BLOCK_PLACEHOLDER_$index"
+                
+                // 保存代码块信息
+                codeBlocks.add("$language:::$code")
+                
+                placeholder
+            }
+            
+            // 处理Mermaid图表
+            tempText = tempText.replace(mermaidRegex) { matchResult ->
                 val mermaidCode = matchResult.groupValues[1].trim()
+                
+                // 跳过空Mermaid图表
+                if (mermaidCode.isBlank()) {
+                    return@replace ""
+                }
+                
                 """<div class="mermaid">
                    |$mermaidCode
                    |</div>""".trimMargin()
             }
-
-            // 处理代码块 (```code```)
-            htmlText = codeBlockRegex.replace(htmlText) { matchResult ->
-                val language = matchResult.groupValues[1]
-                val code = matchResult.groupValues[2]
-                    .replace("<", "&lt;")
-                    .replace(">", "&gt;")
-
-                // 为代码块中的标识符添加特殊样式
-                val highlightedCode = if (language.isEmpty() || language == "plain") {
-                    code
-                } else {
-                    highlightCodeSyntax(code)
-                }
-
-                val langClass = if (language.isNotEmpty()) " class=\"language-$language\"" else ""
-                "<pre><code$langClass>$highlightedCode</code></pre>"
-            }
-
+            
+            // 现在处理其他Markdown元素
+            var htmlText = tempText
+            
             // 处理行内代码 (`code`)
             htmlText = inlineCodeRegex.replace(htmlText) { matchResult ->
                 val code = matchResult.groupValues[1]
@@ -231,8 +302,43 @@ class MarkdownRenderer {
             htmlText = paragraphEndFixRegex.replace(htmlText) { matchResult ->
                 "</${matchResult.groupValues[1]}>"
             }
+            
+            // 最后，将代码块占位符替换回实际的代码块
+            htmlText = placeholderRegex.replace(htmlText) { matchResult ->
+                val index = matchResult.groupValues[1].toInt()
+                if (index < codeBlocks.size) {
+                    val blockInfo = codeBlocks[index].split(":::", limit = 2)
+                    val language = blockInfo[0]
+                    val code = blockInfo[1]
+                        .replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;")
+                        .replace("\"", "&quot;")
+                    
+                    // 为代码块中的标识符添加特殊样式
+                    val highlightedCode = if (language.isEmpty() || language == "plain") {
+                        code
+                    } else {
+                        highlightCodeSyntax(code)
+                    }
+                    
+                    val langClass = if (language.isNotEmpty()) " class=\"language-$language\"" else ""
+                    "<pre><code$langClass>$highlightedCode</code></pre>"
+                } else {
+                    "" // 如果索引超出范围，返回空字符串
+                }
+            }
 
             return htmlText
+        }
+
+        /**
+         * 处理内联代码文本，移除括号内容
+         */
+        private fun preprocessCodeText(code: String): String {
+            // 移除括号及其内容的正则表达式
+            val bracketsContentRegex = "\\([^)]*\\)".toRegex()
+            return code.replace(bracketsContentRegex, "").trim()
         }
 
         /**
@@ -370,6 +476,9 @@ class MarkdownRenderer {
                             border: 1px solid $codeBorderColor;
                             overflow: auto;
                             margin: 10px 0;
+                            min-height: 20px; /* 确保即使为空也有最小高度 */
+                            max-height: 500px; /* 限制最大高度 */
+                            display: block; /* 确保显示为块级元素 */
                         }
                         pre code {
                             font-family: "JetBrains Mono", Consolas, monospace;
@@ -378,6 +487,10 @@ class MarkdownRenderer {
                             color: $textColor;
                             border: none;
                             font-weight: normal;
+                            display: block; /* 确保代码块始终显示为块级元素 */
+                            min-height: 1em; /* 确保代码块有最小高度 */
+                            white-space: pre; /* 保留空白符 */
+                            word-wrap: normal; /* 防止自动换行 */
                         }
                         blockquote {
                             border-left: 4px solid $blockquoteBorderColor;
