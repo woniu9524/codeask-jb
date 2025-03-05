@@ -1,9 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-  <g fill="none" fill-rule="evenodd">
-    <rect fill="#6E6E6E" x="1" y="1" width="14" height="14" rx="2"/>
-    <path d="M4.5 4h7v1h-7z" fill="#FFF"/>
-    <path d="M4.5 6h7v1h-7z" fill="#FFF"/>
-    <path d="M4.5 8h7v1h-7z" fill="#FFF"/>
-    <path d="M4.5 10h4v1h-4z" fill="#FFF"/>
-  </g>
+  <!-- 背景 -->
+  <rect width="16" height="16" fill="#7FDBFF" rx="2" ry="2"/>
+  
+  <!-- 主体 -->
+  <circle cx="8" cy="8.5" r="6.5" fill="#FFF9E5"/>
+  
+  <!-- 耳朵 -->
+  <circle cx="6" cy="3" r="1.2" fill="#FFF9E5"/>
+  <circle cx="10" cy="3" r="1.2" fill="#FFF9E5"/>
+  
+  <!-- 眼睛 -->
+  <ellipse cx="6.5" cy="7" rx="0.8" ry="1.2" fill="#6E6E6E"/>
+  <ellipse cx="9.5" cy="7" rx="0.8" ry="1.2" fill="#6E6E6E"/>
+  
+  <!-- 鼻子 -->
+  <ellipse cx="8" cy="9" rx="1" ry="0.8" fill="#FF9E9E"/>
+  
+  <!-- 胡须 -->
+  <line x1="3.5" y1="8.5" x2="6" y2="9" stroke="#333" stroke-width="0.6"/>
+  <line x1="4" y1="10" x2="6.5" y2="9.5" stroke="#333" stroke-width="0.6"/>
+  <line x1="12.5" y1="8.5" x2="10" y2="9" stroke="#333" stroke-width="0.6"/>
+  <line x1="12" y1="10" x2="9.5" y2="9.5" stroke="#333" stroke-width="0.6"/>
 </svg> 
