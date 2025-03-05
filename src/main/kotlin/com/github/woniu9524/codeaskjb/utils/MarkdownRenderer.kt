@@ -454,31 +454,37 @@ class MarkdownRenderer {
                     <style>
                         body {
                             font-family: "JetBrains Mono", "Segoe UI", "Fira Code", Consolas, monospace;
-                            font-size: 13px;
-                            line-height: 1.6;
+                            font-size: 14px;
+                            line-height: 1.5;
                             margin: 10px;
                             background-color: $backgroundColor;
                             color: $textColor;
+                            max-width: 900px;
+                            margin-left: auto;
+                            margin-right: auto;
+                            padding-left: 10px;
+                            padding-right: 10px;
                         }
                         code.inline-code {
                             font-family: "JetBrains Mono", Consolas, monospace;
                             background-color: $inlineCodeBackgroundColor;
-                            padding: 2px 4px;
-                            border-radius: 3px;
+                            padding: 2px 5px;
+                            border-radius: 4px;
                             border: 1px solid $codeBorderColor;
                             font-weight: bold;
                             color: ${if (isDarkTheme) "#A9B7C6" else "#000000"};
                         }
                         pre {
                             background-color: $codeBackgroundColor;
-                            padding: 10px;
-                            border-radius: 5px;
+                            padding: 12px;
+                            border-radius: 6px;
                             border: 1px solid $codeBorderColor;
                             overflow: auto;
                             margin: 10px 0;
                             min-height: 20px; /* 确保即使为空也有最小高度 */
                             max-height: 500px; /* 限制最大高度 */
                             display: block; /* 确保显示为块级元素 */
+                            box-shadow: ${if (isDarkTheme) "0 2px 5px rgba(0,0,0,0.3)" else "0 2px 8px rgba(0,0,0,0.1)"};
                         }
                         pre code {
                             font-family: "JetBrains Mono", Consolas, monospace;
@@ -493,55 +499,105 @@ class MarkdownRenderer {
                             word-wrap: normal; /* 防止自动换行 */
                         }
                         blockquote {
-                            border-left: 4px solid $blockquoteBorderColor;
-                            padding-left: 10px;
+                            border-left: 4px solid ${if (isDarkTheme) "#589DF6" else "#0366D6"};
+                            padding: 10px 15px;
                             color: $blockquoteColor;
                             margin: 10px 0;
+                            background-color: ${if (isDarkTheme) "#2D2F31" else "#F6F8FA"};
+                            border-radius: 0 4px 4px 0;
                         }
                         img {
                             max-width: 100%;
                             border: 1px solid $codeBorderColor;
-                            border-radius: 4px;
+                            border-radius: 6px;
+                            margin: 8px 0;
+                            box-shadow: ${if (isDarkTheme) "0 2px 5px rgba(0,0,0,0.3)" else "0 1px 5px rgba(0,0,0,0.15)"};
                         }
                         h1, h2, h3, h4, h5, h6 {
                             font-family: "Segoe UI", sans-serif;
-                            margin-top: 20px;
+                            margin-top: 18px;
                             margin-bottom: 10px;
                             font-weight: 600;
-                            line-height: 1.25;
+                            line-height: 1.3;
                             color: ${if (isDarkTheme) "#D4D4D4" else "#000000"};
+                            border-bottom: ${if (isDarkTheme) "1px solid #3C3F41" else "1px solid #EFEFEF"};
+                            padding-bottom: 4px;
                         }
-                        h1 { font-size: 1.8em; }
-                        h2 { font-size: 1.6em; }
-                        h3 { font-size: 1.4em; }
-                        h4 { font-size: 1.2em; }
+                        h1 { font-size: 1.9em; }
+                        h2 { font-size: 1.7em; }
+                        h3 { font-size: 1.5em; }
+                        h4 { font-size: 1.3em; }
                         h5 { font-size: 1.1em; }
                         h6 { font-size: 1em; }
+                        
+                        /* 改进列表样式 */
                         ul, ol {
-                            padding-left: 20px;
+                            padding-left: 25px;
+                            margin: 10px 0;
                         }
-                        li {
-                            margin: 4px 0;
+                        ul {
+                            list-style-type: none;
+                        }
+                        ul li {
+                            position: relative;
+                            margin: 5px 0;
+                            padding-left: 5px;
+                        }
+                        ul li:before {
+                            content: "•";
+                            color: ${if (isDarkTheme) "#589DF6" else "#0366D6"};
+                            font-weight: bold;
+                            display: inline-block;
+                            width: 1em;
+                            position: absolute;
+                            left: -15px;
+                            top: 0px;
+                            font-size: 1.2em;
+                        }
+                        ol li {
+                            margin: 5px 0;
+                            padding-left: 5px;
+                        }
+                        /* 嵌套列表样式 */
+                        ul ul, ol ul {
+                            margin: 3px 0;
+                        }
+                        ul ul li:before {
+                            content: "◦";
+                            font-size: 1.1em;
+                        }
+                        ul ul ul li:before {
+                            content: "▪";
+                            font-size: 0.9em;
+                        }
+                        
+                        p {
+                            margin: 10px 0;
+                            line-height: 1.6;
                         }
                         a {
                             color: $linkColor;
                             text-decoration: none;
+                            border-bottom: 1px dotted $linkColor;
+                            padding-bottom: 1px;
+                            transition: border-bottom 0.2s ease;
                         }
                         a:hover {
-                            text-decoration: underline;
+                            text-decoration: none;
+                            border-bottom: 1px solid $linkColor;
                         }
                         .mermaid {
-                            margin: 16px 0;
+                            margin: 12px 0;
                             text-align: center;
                             background-color: ${if (isDarkTheme) "#3C3F41" else "#FFFFFF"};
-                            padding: 10px;
+                            padding: 8px;
                             border-radius: 8px;
                         }
                         hr {
                             border: none;
                             height: 1px;
                             background-color: ${if (isDarkTheme) "#555555" else "#DDDDDD"};
-                            margin: 16px 0;
+                            margin: 12px 0;
                         }
                         
                         /* 代码高亮样式 */

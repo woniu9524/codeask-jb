@@ -68,24 +68,6 @@ class CodeAskToolWindowFactory : ToolWindowFactory {
             setContent(JPanel(BorderLayout()).apply {
                 add(noFilePanel, BorderLayout.CENTER)
             })
-
-            // 刷新按钮
-            val actionGroup = DefaultActionGroup().apply {
-                add(object : AnAction("刷新") {
-                    override fun actionPerformed(e: AnActionEvent) {
-                        refreshData()
-                    }
-                })
-            }
-
-            val actionToolbar = ActionManager.getInstance().createActionToolbar(
-                ActionPlaces.TOOLBAR,
-                actionGroup,
-                true
-            )
-
-            // 设置工具栏
-            setToolbar(actionToolbar.component)
         }
 
         /**
@@ -207,32 +189,6 @@ class CodeAskToolWindowFactory : ToolWindowFactory {
             }
 
             panel.add(scrollPane, BorderLayout.CENTER)
-
-            // 底部按钮面板
-            val buttonPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 5))
-
-            // 复制解释按钮
-            val copyButton = JButton("复制解释").apply {
-                addActionListener {
-                    val selection = StringSelection(fileData.result)
-                    Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
-                }
-            }
-
-            // 刷新渲染按钮
-            val refreshButton = JButton("刷新渲染").apply {
-                addActionListener {
-                    // 清除缓存并重新渲染
-                    MarkdownRenderer.clearCache()
-                    explanationText.text = MarkdownRenderer.renderMarkdown(fileData.result)
-                }
-            }
-
-            buttonPanel.add(copyButton)
-            buttonPanel.add(refreshButton)
-            buttonPanel.border = BorderFactory.createEmptyBorder(5, 10, 10, 10)
-
-            panel.add(buttonPanel, BorderLayout.SOUTH)
 
             return panel
         }
