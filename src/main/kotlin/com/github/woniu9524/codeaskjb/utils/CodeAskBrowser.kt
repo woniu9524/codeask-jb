@@ -26,6 +26,7 @@ import org.cef.misc.StringRef
 import org.cef.network.CefRequest
 import org.cef.network.CefResponse
 import com.intellij.ide.ui.LafManager
+import com.intellij.ide.ui.LafManagerListener
 import com.intellij.util.ui.UIUtil
 import java.awt.event.MouseEvent
 import java.awt.event.MouseListener
@@ -119,6 +120,16 @@ class CodeAskBrowser(private val project: Project) {
                     }
                 }
             }, browser.cefBrowser)
+            
+            // 监听IDE主题变更
+            ApplicationManager.getApplication().messageBus.connect().subscribe(
+                LafManagerListener.TOPIC,
+                LafManagerListener {
+                    ApplicationManager.getApplication().invokeLater {
+                        sendThemeInfo()
+                    }
+                }
+            )
             
             // 加载主页面
             val url = "http://$DOMAIN_NAME/index.html"
@@ -243,7 +254,13 @@ class CodeAskBrowser(private val project: Project) {
     private fun sendThemeInfo() {
         // 检测当前IDE主题是否为暗色
         val isDarkTheme = isDarkTheme()
-        sendToWeb("themeChanged", mapOf("isDark" to isDarkTheme))
+        val themeName = LafManager.getInstance().currentLookAndFeel.name
+        LOG.info("当前IDE主题: $themeName, 是否为暗色: $isDarkTheme")
+        
+        sendToWeb("themeChanged", mapOf(
+            "isDark" to isDarkTheme,
+            "themeName" to themeName
+        ))
     }
     
     /**

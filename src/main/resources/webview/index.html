@@ -502,8 +502,9 @@
                         break;
                     case 'themeChanged':
                         // 处理主题变更消息
-                        if (data.theme) {
-                            switchTheme(data.theme);
+                        if (data.isDark !== undefined) {
+                            window.ideThemeReceived = true; // 标记已接收IDE主题信息
+                            switchTheme(data.isDark ? 'dark' : 'light');
                         }
                         break;
                 }
@@ -573,7 +574,7 @@
         
         // 初始化
         function init() {
-            // 检测系统主题偏好
+            // 检测系统主题偏好（但最终会被IDE主题覆盖）
             if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
                 switchTheme('light');
             }
@@ -581,7 +582,10 @@
             // 监听系统主题变化
             if (window.matchMedia) {
                 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-                    switchTheme(e.matches ? 'dark' : 'light');
+                    // 仅在未收到IDE主题信息时使用系统主题
+                    if (!window.ideThemeReceived) {
+                        switchTheme(e.matches ? 'dark' : 'light');
+                    }
                 });
             }
             

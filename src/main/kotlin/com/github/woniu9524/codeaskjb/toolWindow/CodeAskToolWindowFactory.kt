@@ -11,6 +11,10 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
+import com.intellij.ide.ui.LafManager
+import com.intellij.ide.ui.LafManagerListener
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.util.Disposer
 
 /**
  * 代码解释工具窗口工厂
@@ -53,13 +57,16 @@ class CodeAskToolWindowFactory : ToolWindowFactory {
     /**
      * 代码解释面板 - 使用JCEF浏览器实现
      */
-    class CodeAskPanel(private val project: Project) : SimpleToolWindowPanel(true, true) {
+    class CodeAskPanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
         private val browser = CodeAskBrowser(project)
         private var currentFile: VirtualFile? = null
         
         init {
             // 设置面板内容为浏览器组件
             setContent(browser.component)
+            
+            // 注册面板资源释放
+            Disposer.register(project, this)
         }
         
         /**
@@ -86,6 +93,13 @@ class CodeAskToolWindowFactory : ToolWindowFactory {
             } catch (e: Exception) {
                 LOG.error("Failed to refresh file explanation", e)
             }
+        }
+        
+        /**
+         * 资源释放
+         */
+        override fun dispose() {
+            // 清理资源
         }
     }
 } 
