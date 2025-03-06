@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.intellij.find.FindManager
 import com.intellij.find.FindModel
+import com.intellij.find.FindResult
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.ScrollType
@@ -27,13 +28,11 @@ import org.cef.network.CefRequest
 import org.cef.network.CefResponse
 import com.intellij.ide.ui.LafManager
 import com.intellij.ide.ui.LafManagerListener
-import com.intellij.util.ui.UIUtil
-import java.awt.event.MouseEvent
-import java.awt.event.MouseListener
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.editor.Editor
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import javax.swing.JComponent
-import javax.swing.SwingUtilities
 
 /**
  * CodeAsk浏览器包装类
@@ -79,7 +78,7 @@ class CodeAskBrowser(private val project: Project) {
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
     
     // JCEF浏览器实例
-    private val browser = JBCefBrowser.createBuilder().build()
+    private val browser = JBCefBrowser()
     
     // JS通信通道 - 延迟初始化
     private var jsChannel: JBCefJSQuery? = null
@@ -90,6 +89,9 @@ class CodeAskBrowser(private val project: Project) {
     
     init {
         try {
+            // 设置JS查询池大小
+            browser.jbCefClient.setProperty(JBCefClient.Properties.JS_QUERY_POOL_SIZE, 100)
+            
             // 确保注册了自定义Schema处理器
             registerCustomSchemeHandler()
             
@@ -103,17 +105,19 @@ class CodeAskBrowser(private val project: Project) {
                 ) {
                     if (!isLoading) {
                         try {
-                            // 浏览器加载完成后初始化
-                            initJsChannel()
-                            injectJavascriptInterface()
-                            sendThemeInfo()
-                            
-                            // 加载当前文件
-                            val currentFile = FileEditorManager.getInstance(project).selectedFiles.firstOrNull()
-                            if (currentFile != null) {
-                                LOG.info("初始化加载文件: ${currentFile.path}")
-                                refreshExplanation(currentFile.path)
-                            }
+                            // 延迟初始化，确保浏览器已完全加载
+                            ApplicationManager.getApplication().invokeLater({
+                                initJsChannel()
+                                injectJavascriptInterface()
+                                sendThemeInfo()
+                                
+                                // 加载当前文件
+                                val currentFile = FileEditorManager.getInstance(project).selectedFiles.firstOrNull()
+                                if (currentFile != null) {
+                                    LOG.info("初始化加载文件: ${currentFile.path}")
+                                    refreshExplanation(currentFile.path)
+                                }
+                            }, ModalityState.any())
                         } catch (e: Exception) {
                             LOG.error("Error during browser initialization", e)
                         }
@@ -144,11 +148,15 @@ class CodeAskBrowser(private val project: Project) {
      * 初始化JS通道
      */
     private fun initJsChannel() {
-        if (jsChannel == null) {
-            LOG.info("Initializing JS channel")
-            jsChannel = JBCefJSQuery.create(browser)
-            setupJavaScriptBridge()
-            LOG.info("JS channel initialized")
+        try {
+            if (jsChannel == null) {
+                LOG.info("Initializing JS channel")
+                jsChannel = JBCefJSQuery.create(browser as JBCefBrowser)
+                setupJavaScriptBridge()
+                LOG.info("JS channel initialized")
+            }
+        } catch (e: Exception) {
+            LOG.error("Failed to initialize JS channel", e)
         }
     }
     
@@ -241,8 +249,14 @@ class CodeAskBrowser(private val project: Project) {
                 }
             """.trimIndent()
             
-            // 执行脚本
-            browser.executeJavaScriptAsync(script)
+            // 使用新的API执行脚本
+            coroutineScope.launch {
+                try {
+                    browser.executeJavaScript(script)
+                } catch (e: Exception) {
+                    LOG.error("Error executing JavaScript", e)
+                }
+            }
         } catch (e: Exception) {
             LOG.error("Error sending message to web", e)
         }
@@ -347,8 +361,14 @@ class CodeAskBrowser(private val project: Project) {
     private fun searchInCurrentEditor(searchText: String) {
         try {
             // 确保搜索文本不为空
-            if (searchText.isBlank() || jsChannel == null) return
-            
+            if (searchText.isBlank() || jsChannel == null) {
+                sendToWeb("searchResult", mapOf(
+                    "success" to false,
+                    "message" to "搜索文本为空"
+                ))
+                return
+            }
+
             ApplicationManager.getApplication().invokeLater {
                 try {
                     // 获取当前编辑器
@@ -368,7 +388,7 @@ class CodeAskBrowser(private val project: Project) {
                     val findModel = FindModel().apply {
                         stringToFind = searchText
                         isCaseSensitive = true
-                        isWholeWordsOnly = false
+                        isWholeWordsOnly = true  // 修改为全词匹配
                         isRegularExpressions = false
                         isGlobal = true
                     }
@@ -377,45 +397,44 @@ class CodeAskBrowser(private val project: Project) {
                     val document = editor.document
                     val startOffset = editor.caretModel.offset
                     
-                    val result = findManager.findString(document.charsSequence, startOffset, findModel, editor.virtualFile)
+                    val result = findManager.findString(
+                        document.charsSequence, 
+                        startOffset,
+                        findModel,
+                        editor.virtualFile
+                    )
                     
                     if (result.isStringFound) {
-                        // 将编辑器定位到找到的位置
-                        editor.caretModel.moveToOffset(result.startOffset)
-                        editor.selectionModel.setSelection(result.startOffset, result.endOffset)
-                        editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
-                        
-                        // 确保编辑器获得焦点
-                        fileEditorManager.openFile(editor.virtualFile, true)
-                        
-                        sendToWeb("searchResult", mapOf(
-                            "success" to true,
-                            "message" to "找到匹配项"
-                        ))
+                        handleSearchSuccess(editor, fileEditorManager, result)
                     } else {
-                        // 如果从当前位置到文件末尾没找到，尝试从文件开头重新搜索
+                        // 从文件开头重新搜索
                         val resultFromStart = findManager.findString(
-                            document.charsSequence, 0, findModel, editor.virtualFile)
+                            document.charsSequence,
+                            0,
+                            findModel,
+                            editor.virtualFile
+                        )
                         
                         if (resultFromStart.isStringFound) {
-                            // 将编辑器定位到找到的位置
-                            editor.caretModel.moveToOffset(resultFromStart.startOffset)
-                            editor.selectionModel.setSelection(
-                                resultFromStart.startOffset, resultFromStart.endOffset)
-                            editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
-                            
-                            // 确保编辑器获得焦点
-                            fileEditorManager.openFile(editor.virtualFile, true)
-                            
-                            sendToWeb("searchResult", mapOf(
-                                "success" to true,
-                                "message" to "找到匹配项"
-                            ))
+                            handleSearchSuccess(editor, fileEditorManager, resultFromStart)
                         } else {
-                            sendToWeb("searchResult", mapOf(
-                                "success" to false,
-                                "message" to "未找到匹配项"
-                            ))
+                            // 如果全词匹配失败，尝试部分匹配
+                            findModel.isWholeWordsOnly = false
+                            val partialResult = findManager.findString(
+                                document.charsSequence,
+                                0,
+                                findModel,
+                                editor.virtualFile
+                            )
+                            
+                            if (partialResult.isStringFound) {
+                                handleSearchSuccess(editor, fileEditorManager, partialResult)
+                            } else {
+                                sendToWeb("searchResult", mapOf(
+                                    "success" to false,
+                                    "message" to "未找到匹配项"
+                                ))
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -431,6 +450,26 @@ class CodeAskBrowser(private val project: Project) {
         }
     }
     
+    // 新增处理搜索成功的辅助函数
+    private fun handleSearchSuccess(
+        editor: Editor,
+        fileEditorManager: FileEditorManager,
+        result: FindResult
+    ) {
+        // 将编辑器定位到找到的位置
+        editor.caretModel.moveToOffset(result.startOffset)
+        editor.selectionModel.setSelection(result.startOffset, result.endOffset)
+        editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
+        
+        // 确保编辑器获得焦点
+        fileEditorManager.openFile(editor.virtualFile, true)
+        
+        sendToWeb("searchResult", mapOf(
+            "success" to true,
+            "message" to "找到匹配项"
+        ))
+    }
+    
     /**
      * 设置JavaScript桥接
      */
@@ -441,6 +480,9 @@ class CodeAskBrowser(private val project: Project) {
         channel.addHandler { message: String? ->
             if (message != null) {
                 try {
+                    // 记录接收到的消息，用于调试
+                    LOG.info("Received message from web: $message")
+                    
                     // 特殊消息类型直接处理
                     if (message == "bridge_test") {
                         sendToWeb("bridge_test_response", mapOf("success" to true))
@@ -457,6 +499,7 @@ class CodeAskBrowser(private val project: Project) {
                             
                             when (messageType) {
                                 "searchInCode" -> {
+                                    LOG.info("Processing searchInCode request")
                                     val codeText = data.get("code").asString
                                     searchInCurrentEditor(codeText)
                                 }
@@ -472,20 +515,27 @@ class CodeAskBrowser(private val project: Project) {
                                     }
                                     sendToWeb("test_response", mapOf("message" to "IDE已收到准备就绪消息"))
                                 }
-                                "test" -> {
-                                    // 处理测试消息
-                                    sendToWeb("test_response", mapOf("message" to "这是来自IDE的回复"))
-                                }
                                 "bridge_initialized" -> {
                                     sendToWeb("bridge_confirmed", mapOf("timestamp" to System.currentTimeMillis()))
+                                }
+                                else -> {
+                                    LOG.warn("Unhandled message type: $messageType")
                                 }
                             }
                         }
                     } catch (e: Exception) {
                         LOG.error("Error parsing JSON message: $message", e)
+                        // 发送错误信息回前端
+                        sendToWeb("error", mapOf(
+                            "message" to "消息处理失败: ${e.message}"
+                        ))
                     }
                 } catch (e: Exception) {
                     LOG.error("Failed to handle JS message", e)
+                    // 发送错误信息回前端
+                    sendToWeb("error", mapOf(
+                        "message" to "消息处理失败: ${e.message}"
+                    ))
                 }
             }
             null
