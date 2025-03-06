@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeAsk解释器</title>
+    <!-- 添加Markdown解析库 -->
+    <script src="marked.min.js"></script>
+    <!-- 添加Mermaid图表支持 -->
+    <script src="mermaid.min.js"></script>
+    <!-- 添加代码高亮库 -->
+    <script src="highlight.min.js"></script>
+    <link rel="stylesheet" href="github-dark.min.css" id="hljs-theme">
+    <style>
+        /* 系统变量 */
+        body[data-theme="dark"] {
+            --background-color: #2b2b2b;
+            --text-color: #a9b7c6;
+            --border-color: #555555;
+            --primary-color: #589df6;
+            --code-background: #2d2d2d;
+            --code-border: #555555;
+            --header-background: #3c3f41;
+            --blockquote-background: rgba(255, 255, 255, 0.05);
+            --table-border: #555;
+            --table-header-bg: #3c3f41;
+            --table-alt-bg: rgba(255, 255, 255, 0.03);
+            --empty-text-color: #888;
+        }
+        
+        body[data-theme="light"] {
+            --background-color: #f5f5f5;
+            --text-color: #2c2c2c;
+            --border-color: #dddddd;
+            --primary-color: #2675bf;
+            --code-background: #f0f0f0;
+            --code-border: #dddddd;
+            --header-background: #e8e8e8;
+            --blockquote-background: rgba(0, 0, 0, 0.03);
+            --table-border: #ddd;
+            --table-header-bg: #e8e8e8;
+            --table-alt-bg: rgba(0, 0, 0, 0.02);
+            --empty-text-color: #999;
+        }
+        
+        /* 基础样式 */
+        body {
+            font-family: "JetBrains Mono", "Segoe UI", Consolas, monospace;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            font-size: 14px;
+            line-height: 1.5;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            background-color: var(--header-background);
+            transition: background-color 0.3s;
+        }
+        
+        .tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            border-right: 1px solid var(--border-color);
+            position: relative;
+            transition: background-color 0.2s, border-color 0.3s;
+        }
+        
+        .tab:hover {
+            background-color: rgba(128, 128, 128, 0.1);
+        }
+        
+        .tab.active {
+            border-bottom: 2px solid var(--primary-color);
+        }
+        
+        #content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            transition: background-color 0.3s;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--empty-text-color);
+            text-align: center;
+        }
+
+        /* 自定义滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--header-background);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+        
+        /* 增强的Markdown内容样式 */
+        .markdown-content {
+            line-height: 1.6;
+            font-size: 14px;
+            color: var(--text-color);
+            max-width: 100%;
+            transition: color 0.3s;
+        }
+        
+        .markdown-content h1, 
+        .markdown-content h2, 
+        .markdown-content h3, 
+        .markdown-content h4 {
+            color: var(--text-color);
+            margin-top: 1.8em;
+            margin-bottom: 1em;
+            font-weight: 600;
+            line-height: 1.3;
+            transition: color 0.3s;
+        }
+        
+        .markdown-content h1 {
+            font-size: 1.7em;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.3em;
+            transition: border-color 0.3s;
+        }
+        
+        .markdown-content h2 {
+            font-size: 1.4em;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.3em;
+            transition: border-color 0.3s;
+        }
+        
+        .markdown-content h3 {
+            font-size: 1.2em;
+        }
+        
+        .markdown-content h4 {
+            font-size: 1.1em;
+        }
+        
+        .markdown-content code {
+            background-color: var(--code-background);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            font-size: 0.9em;
+            transition: background-color 0.3s;
+        }
+        
+        .markdown-content a {
+            color: var(--primary-color);
+            text-decoration: none;
+            border-bottom: 1px dotted rgba(88, 157, 246, 0.5);
+            transition: color 0.2s, border-bottom 0.2s;
+        }
+        
+        .markdown-content a:hover {
+            opacity: 0.8;
+        }
+        
+        .markdown-content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding: 0.8em 1em;
+            color: var(--text-color);
+            opacity: 0.85;
+            margin-left: 0;
+            margin-right: 0;
+            background-color: var(--blockquote-background);
+            border-radius: 0 4px 4px 0;
+            transition: background-color 0.3s, border-left-color 0.3s;
+        }
+        
+        .markdown-content blockquote p {
+            margin: 0.5em 0;
+        }
+        
+        .markdown-content ul, 
+        .markdown-content ol {
+            padding-left: 2em;
+            margin: 1em 0;
+        }
+        
+        .markdown-content li {
+            margin: 0.5em 0;
+        }
+        
+        .markdown-content hr {
+            height: 1px;
+            border: none;
+            background-color: var(--border-color);
+            margin: 2em 0;
+            transition: background-color 0.3s;
+        }
+        
+        /* 高亮代码块样式优化 */
+        .markdown-content pre {
+            background-color: var(--code-background);
+            border-radius: 6px;
+            border: 1px solid var(--code-border);
+            overflow: auto;
+            margin: 1em 0;
+            position: relative;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 1em;
+            font-family: "JetBrains Mono", Consolas, monospace;
+            display: block;
+            overflow-x: auto;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+        
+        /* 表格样式 */
+        .markdown-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+            overflow: auto;
+            border: 1px solid var(--table-border);
+            transition: border-color 0.3s;
+        }
+        
+        .markdown-content th {
+            background-color: var(--table-header-bg);
+            border: 1px solid var(--table-border);
+            padding: 0.6em;
+            text-align: left;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        
+        .markdown-content td {
+            border: 1px solid var(--table-border);
+            padding: 0.6em;
+            transition: border-color 0.3s;
+        }
+        
+        .markdown-content tr:nth-child(even) {
+            background-color: var(--table-alt-bg);
+            transition: background-color 0.3s;
+        }
+        
+        .content-text {
+            white-space: pre-wrap;
+        }
+        
+        /* Mermaid图表样式 */
+        .mermaid {
+            background-color: var(--code-background);
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid var(--code-border);
+            margin: 20px 0;
+            text-align: center;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        
+        /* 图片样式 */
+        .markdown-content img {
+            max-width: 100%;
+            border-radius: 4px;
+            margin: 1em 0;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.3s;
+        }
+        
+        /* 代码语言标签 */
+        .code-language {
+            position: absolute;
+            top: 0;
+            right: 0;
+            padding: 2px 8px;
+            font-size: 0.8em;
+            color: #999;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 0 0 0 4px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        body[data-theme="light"] .code-language {
+            background-color: rgba(0, 0, 0, 0.1);
+            color: #666;
+        }
+    </style>
+</head>
+<body data-theme="dark">
+    <div id="app">
+        <div class="tabs"></div>
+        <div id="content">
+            <div class="empty-state">
+                <p>请打开一个文件以查看其解释</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 全局变量
+        let currentFilePath = null;
+        let currentExplanations = [];
+        let activeTabIndex = 0;
+        let currentTheme = 'dark'; // 默认深色主题
+        
+        // 主题切换函数
+        function switchTheme(theme) {
+            if (theme === 'light' || theme === 'dark') {
+                currentTheme = theme;
+                document.body.setAttribute('data-theme', theme);
+                
+                // 切换Mermaid主题
+                mermaid.initialize({
+                    theme: theme === 'dark' ? 'dark' : 'default',
+                    themeCSS: theme === 'dark' 
+                        ? '.node rect { fill: #2d2d2d; stroke: #555555; } .edgeLabel { color: #a9b7c6; } .edgePath { stroke: #a9b7c6; }'
+                        : '.node rect { fill: #f0f0f0; stroke: #cccccc; } .edgeLabel { color: #333333; } .edgePath { stroke: #333333; }'
+                });
+                
+                // 如果内容已加载，重新渲染以应用新主题
+                if (currentExplanations.length > 0) {
+                    renderContent();
+                }
+            }
+        }
+        
+        // 渲染标签页
+        function renderTabs() {
+            const tabsContainer = document.querySelector('.tabs');
+            tabsContainer.innerHTML = '';
+            
+            if (currentExplanations.length === 0) {
+                tabsContainer.style.display = 'none';
+                return;
+            }
+            
+            tabsContainer.style.display = 'flex';
+            
+            currentExplanations.forEach((explanation, index) => {
+                const tab = document.createElement('div');
+                tab.className = `tab ${index === activeTabIndex ? 'active' : ''}`;
+                tab.textContent = explanation.name || `解释 ${index + 1}`;
+                tab.onclick = () => {
+                    activeTabIndex = index;
+                    renderTabs();
+                    renderContent();
+                };
+                tabsContainer.appendChild(tab);
+            });
+        }
+        
+        // 渲染内容
+        function renderContent() {
+            const contentContainer = document.getElementById('content');
+            
+            if (!currentFilePath || currentExplanations.length === 0) {
+                contentContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>${!currentFilePath ? '请打开一个文件以查看其解释' : '当前文件没有可用的解释'}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const explanation = currentExplanations[activeTabIndex];
+            
+            // 检查内容是否存在
+            if (!explanation.content) {
+                contentContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>没有内容可显示</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 使用Markdown解析内容
+            try {
+                // 渲染Markdown内容
+                const htmlContent = marked.parse(explanation.content);
+                contentContainer.innerHTML = `<div class="markdown-content">${htmlContent}</div>`;
+                
+                // 应用代码高亮
+                applyCodeHighlighting();
+                
+                // 渲染Mermaid图表
+                renderMermaidDiagrams();
+            } catch (e) {
+                // 如果解析失败，回退到普通文本显示
+                contentContainer.innerHTML = `<div class="content-text">${escapeHtml(explanation.content)}</div>`;
+                console.error('Markdown解析失败:', e.message);
+            }
+        }
+        
+        // 应用代码高亮
+        function applyCodeHighlighting() {
+            document.querySelectorAll('pre code').forEach((block) => {
+                // 跳过Mermaid代码块，它们会被单独处理
+                if (!block.classList.contains('language-mermaid')) {
+                    hljs.highlightElement(block);
+                    
+                    // 添加语言标签
+                    const parent = block.parentElement;
+                    const language = Array.from(block.classList)
+                        .find(cls => cls.startsWith('language-'));
+                    
+                    if (language) {
+                        const langName = language.replace('language-', '');
+                        if (langName !== 'mermaid') {
+                            const langTag = document.createElement('div');
+                            langTag.className = 'code-language';
+                            langTag.textContent = langName;
+                            parent.style.position = 'relative';
+                            parent.appendChild(langTag);
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 渲染Mermaid图表
+        function renderMermaidDiagrams() {
+            // 查找所有具有language-mermaid类的代码块
+            const mermaidBlocks = document.querySelectorAll('pre code.language-mermaid');
+            
+            // 创建新的Mermaid图表容器替换代码块
+            if (mermaidBlocks.length > 0) {
+                for (let i = 0; i < mermaidBlocks.length; i++) {
+                    const codeBlock = mermaidBlocks[i];
+                    const mermaidCode = codeBlock.textContent;
+                    
+                    // 创建新的div用于渲染图表
+                    const mermaidDiv = document.createElement('div');
+                    mermaidDiv.className = 'mermaid';
+                    mermaidDiv.textContent = mermaidCode;
+                    
+                    // 替换代码块
+                    const preBlock = codeBlock.parentNode;
+                    preBlock.parentNode.replaceChild(mermaidDiv, preBlock);
+                }
+                
+                // 初始化所有图表
+                try {
+                    mermaid.init();
+                } catch (error) {
+                    console.error('Mermaid图表渲染失败:', error);
+                }
+            }
+        }
+        
+        // 获取文件名
+        function getFileName(path) {
+            return path.split('/').pop().split('\\').pop();
+        }
+        
+        // HTML转义函数
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        
+        // 从IDE接收消息
+        window.receiveFromIde = function(message) {
+            if (message && message.type && message.data) {
+                const { type, data } = message;
+                
+                switch (type) {
+                    case 'fileExplanation':
+                        handleFileExplanation(data);
+                        break;
+                    case 'bridge_ready':
+                        // 桥接准备就绪
+                        break;
+                    case 'themeChanged':
+                        // 处理主题变更消息
+                        if (data.theme) {
+                            switchTheme(data.theme);
+                        }
+                        break;
+                }
+            }
+        };
+        
+        // 处理文件解释
+        function handleFileExplanation(data) {
+            currentFilePath = data.filePath || '未知文件';
+            
+            // 重置解释数组
+            currentExplanations = [];
+            
+            // 检查explanations是否存在
+            if (!data.explanations) {
+                renderTabs();
+                renderContent();
+                return;
+            }
+            
+            // 处理数组格式
+            if (Array.isArray(data.explanations)) {
+                data.explanations.forEach((item, index) => {
+                    // 提取数据，考虑多种可能的格式
+                    let name = '未命名解释';
+                    let content = '';
+                    
+                    if (item.first && item.second) {
+                        name = item.first;
+                        content = item.second.result || JSON.stringify(item.second);
+                    } else if (item.name) {
+                        name = item.name;
+                        content = item.content || item.result || '';
+                    } else if (item.pluginName) {
+                        name = item.pluginName;
+                        content = item.fileData?.result || '';
+                    } else {
+                        // 如果没有明确的结构，直接使用整个对象
+                        name = `解释 ${index + 1}`;
+                        content = JSON.stringify(item);
+                    }
+                    
+                    currentExplanations.push({ name, content });
+                });
+            } 
+            // 处理对象格式
+            else if (typeof data.explanations === 'object') {
+                Object.entries(data.explanations).forEach(([key, value]) => {
+                    let name = key;
+                    let content = '';
+                    
+                    if (value.result) {
+                        content = value.result;
+                    } else {
+                        content = JSON.stringify(value);
+                    }
+                    
+                    currentExplanations.push({ name, content });
+                });
+            }
+            
+            activeTabIndex = 0;
+            
+            renderTabs();
+            renderContent();
+        }
+        
+        // 初始化
+        function init() {
+            // 检测系统主题偏好
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                switchTheme('light');
+            }
+            
+            // 监听系统主题变化
+            if (window.matchMedia) {
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                    switchTheme(e.matches ? 'dark' : 'light');
+                });
+            }
+            
+            // 配置Mermaid
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: currentTheme === 'dark' ? 'dark' : 'default',
+                securityLevel: 'loose',
+                themeCSS: currentTheme === 'dark'
+                    ? '.node rect { fill: #2d2d2d; stroke: #555555; } .edgeLabel { color: #a9b7c6; } .edgePath { stroke: #a9b7c6; }'
+                    : '.node rect { fill: #f0f0f0; stroke: #cccccc; } .edgeLabel { color: #333333; } .edgePath { stroke: #333333; }',
+                flowchart: {
+                    curve: 'linear'
+                }
+            });
+            
+            // 配置marked选项
+            marked.setOptions({
+                breaks: true,        // 允许换行符转换为<br>
+                gfm: true,           // 使用GitHub风格的Markdown
+                headerIds: true,     // 为标题添加ID
+                langPrefix: 'language-'  // 为代码块添加语言前缀
+            });
+            
+            // 窗口加载完成后告诉Java端准备好了
+            if (window.sendToIde) {
+                try {
+                    window.sendToIde('ready', {});
+                } catch (e) {
+                    console.error('发送ready失败:', e.message);
+                }
+            } else {
+                // 尝试延迟发送
+                setTimeout(() => {
+                    if (window.sendToIde) {
+                        try {
+                            window.sendToIde('ready', {});
+                        } catch (e) {
+                            console.error('延迟发送ready失败:', e.message);
+                        }
+                    }
+                }, 2000);
+            }
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+        
+        // 全局错误处理
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error(`JavaScript错误: ${message} at ${source}:${lineno}:${colno}`);
+            return false;
+        };
+    </script>
+</body>
+</html> 

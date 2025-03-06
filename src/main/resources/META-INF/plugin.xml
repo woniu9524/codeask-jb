@@ -6,10 +6,10 @@
     <description><![CDATA[
         代码解释插件，自动加载和显示项目中代码文件的解释信息。
         <ul>
-            <li>支持从.codeaskdata文件加载代码解释数据</li>
-            <li>自动识别当前编辑文件</li>
+            <li>从.codeaskdata文件加载代码解释数据</li>
+            <li>自动识别当前编辑的文件</li>
             <li>多标签页展示不同类型的解释</li>
-            <li>一键复制和刷新解释内容</li>
+            <li>无缝集成到IDE中</li>
         </ul>
     ]]></description>
 

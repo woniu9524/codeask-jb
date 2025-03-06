@@ -10,7 +10,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 
 /**
  * 文件编辑器监听器
- * 用于监听当前打开的文件，并更新代码解释显示
+ * 监听文件打开和选择事件，并相应更新代码解释面板
  */
 class CodeAskFileEditorListener : FileEditorManagerListener {
 
@@ -25,27 +25,25 @@ class CodeAskFileEditorListener : FileEditorManagerListener {
      * 当选中的文件改变时调用
      */
     override fun selectionChanged(event: FileEditorManagerEvent) {
-        val file = event.newFile ?: run {
-            return
-        }
+        val file = event.newFile ?: return
         updateCodeAskPanel(event.manager, file)
     }
 
     /**
      * 更新代码解释面板
+     * 
+     * @param manager 文件编辑器管理器
+     * @param file 当前选中的文件
      */
     private fun updateCodeAskPanel(manager: FileEditorManager, file: VirtualFile) {
         ApplicationManager.getApplication().invokeLater {
             val project = manager.project
-            val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CodeAsk") ?: run {
-                return@invokeLater
-            }
+            val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("CodeAsk") ?: return@invokeLater
             
             // 如果工具窗口已经打开，更新内容
             if (toolWindow.isVisible) {
                 val contentManager = toolWindow.contentManager
                 contentManager.contents.forEach { content ->
-                    // 获取内容视图中的组件
                     val component = content.component
                     if (component is CodeAskToolWindowFactory.CodeAskPanel) {
                         component.updateForFile(file)
