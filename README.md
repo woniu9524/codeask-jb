@@ -1,51 +1,45 @@
-# codeask-jb
 
-![Build](https://github.com/woniu9524/codeask-jb/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
+# CodeAsk-JB
 
-## Template ToDo list
-- [x] Create a new [IntelliJ Platform Plugin Template][template] project.
-- [ ] Get familiar with the [template documentation][template].
-- [ ] Adjust the [pluginGroup](./gradle.properties) and [pluginName](./gradle.properties), as well as the [id](./src/main/resources/META-INF/plugin.xml) and [sources package](./src/main/kotlin).
-- [ ] Adjust the plugin description in `README` (see [Tips][docs:plugin-description])
-- [ ] Review the [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html?from=IJPluginTemplate).
-- [ ] [Publish a plugin manually](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate) for the first time.
-- [ ] Set the `MARKETPLACE_ID` in the above README badges. You can obtain it once the plugin is published to JetBrains Marketplace.
-- [ ] Set the [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html?from=IJPluginTemplate) related [secrets](https://github.com/JetBrains/intellij-platform-plugin-template#environment-variables).
-- [ ] Set the [Deployment Token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html?from=IJPluginTemplate).
-- [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
-
+## 简介
 <!-- Plugin description -->
-This Fancy IntelliJ Platform Plugin is going to be your implementation of the brilliant ideas that you have.
-
-This specific section is a source for the [plugin.xml](/src/main/resources/META-INF/plugin.xml) file which will be extracted by the [Gradle](/build.gradle.kts) during the build process.
-
-To keep everything working, do not remove `<!-- ... -->` sections. 
+CodeAsk-JB 是 JetBrains 集成开发环境的扩展插件，需配合 [CodeAsk](https://github.com/woniu9524/CodeAsk) 主程序使用。本插件可将 CodeAsk 生成的代码分析结果直接集成到 JetBrains IDE 中，提供实时代码解读功能。
 <!-- Plugin description end -->
+![预览](images/demo-zh.png)
 
-## Installation
+## 使用说明
 
-- Using the IDE built-in plugin system:
-  
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "codeask-jb"</kbd> >
-  <kbd>Install</kbd>
-  
-- Using JetBrains Marketplace:
+### 前置配置
+1. 确保 已经使用 CodeAsk 生成代码分析数据
+2. 在 IDE 中打开需要分析的项目
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+### 基本操作
+- 点击右侧面板 `CodeAsk` 图标打开右侧面板即可查看
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from JetBrains Marketplace and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+## 安装指南
 
-- Manually:
+### 方法一：通过 IDE 插件市场安装
+1. 打开设置面板  
+   `File` > `Settings`（Windows/Linux）  
+   或 `IntelliJ IDEA` > `Preferences`（macOS）
 
-  Download the [latest release](https://github.com/woniu9524/codeask-jb/releases/latest) and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+2. 进入插件管理  
+   选择 `Plugins` > 点击 `Marketplace` 标签
+
+3. 搜索插件  
+   在搜索栏输入 `CodeAsk`
+
+4. 安装并重启  
+   点击 `Install` 按钮，安装完成后重启 IDE
+
+   
+### 方法二：GitHub 手动安装(适合内网用户)
+1. 下载最新版本  
+   访问 [Releases 页面](https://github.com/woniu9524/codeask-jb/releases/latest)  
+   下载 `codeask-jb-x.x.x.jar` 文件
+
+2. 安装插件  
+   `Settings` > `Plugins` > 齿轮图标 > `Install Plugin from Disk...`  
+   选择下载的文件并重启 IDE
 
 
----
-Plugin based on the [IntelliJ Platform Plugin Template][template].
-
-[template]: https://github.com/JetBrains/intellij-platform-plugin-template
-[docs:plugin-description]: https://plugins.jetbrains.com/docs/intellij/plugin-user-experience.html#plugin-description-and-presentation

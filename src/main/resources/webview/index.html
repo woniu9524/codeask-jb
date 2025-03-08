@@ -316,7 +316,8 @@
         <div class="tabs"></div>
         <div id="content">
             <div class="empty-state">
-                <p>请打开一个文件以查看其解释</p>
+                <p>Please open a file to view its explanation</p>
+                <p>Data is sourced from .codeaskdata and can be generated in CodeAsk</p>
             </div>
         </div>
     </div>
@@ -381,7 +382,7 @@
             if (!currentFilePath || currentExplanations.length === 0) {
                 contentContainer.innerHTML = `
                     <div class="empty-state">
-                        <p>${!currentFilePath ? '请打开一个文件以查看其解释' : '当前文件没有可用的解释'}</p>
+                        <p>${!currentFilePath ? 'Please open a file to view its explanation' : 'No explanations available for the current file'}</p>
                     </div>
                 `;
                 return;
@@ -393,7 +394,7 @@
             if (!explanation.content) {
                 contentContainer.innerHTML = `
                     <div class="empty-state">
-                        <p>没有内容可显示</p>
+                        <p>No content to display</p>
                     </div>
                 `;
                 return;
