@@ -6,9 +6,14 @@ import com.google.gson.JsonParser
 import com.intellij.find.FindManager
 import com.intellij.find.FindModel
 import com.intellij.find.FindResult
+import com.intellij.ide.ui.LafManager
+import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.ScrollType
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.jcef.*
@@ -26,13 +31,11 @@ import org.cef.misc.IntRef
 import org.cef.misc.StringRef
 import org.cef.network.CefRequest
 import org.cef.network.CefResponse
-import com.intellij.ide.ui.LafManager
-import com.intellij.ide.ui.LafManagerListener
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.editor.Editor
+import java.awt.Color
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import javax.swing.JComponent
+
 
 /**
  * CodeAsk浏览器包装类
@@ -43,7 +46,7 @@ class CodeAskBrowser(private val project: Project) {
         private val LOG = Logger.getInstance(CodeAskBrowser::class.java)
         private const val SCHEME_NAME = "codeask"
         private const val DOMAIN_NAME = "app"
-        
+
         // 启用开发者工具
         init {
             try {
@@ -56,7 +59,7 @@ class CodeAskBrowser(private val project: Project) {
                 LOG.error("Failed to enable JCEF developer tools", e)
             }
         }
-        
+
         /**
          * 注册自定义Schema处理器
          */
@@ -73,28 +76,28 @@ class CodeAskBrowser(private val project: Project) {
             }
         }
     }
-    
+
     // 创建协程作用域
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
-    
+
     // JCEF浏览器实例
     private val browser = JBCefBrowser()
-    
+
     // JS通信通道 - 延迟初始化
     private var jsChannel: JBCefJSQuery? = null
-    
+
     // 获取浏览器组件
     val component: JComponent
         get() = browser.component
-    
+
     init {
         try {
             // 设置JS查询池大小
             browser.jbCefClient.setProperty(JBCefClient.Properties.JS_QUERY_POOL_SIZE, 100)
-            
+
             // 确保注册了自定义Schema处理器
             registerCustomSchemeHandler()
-            
+
             // 设置页面加载完成后的处理
             browser.jbCefClient.addLoadHandler(object : CefLoadHandlerAdapter() {
                 override fun onLoadingStateChange(
@@ -110,7 +113,7 @@ class CodeAskBrowser(private val project: Project) {
                                 initJsChannel()
                                 injectJavascriptInterface()
                                 sendThemeInfo()
-                                
+
                                 // 加载当前文件
                                 val currentFile = FileEditorManager.getInstance(project).selectedFiles.firstOrNull()
                                 if (currentFile != null) {
@@ -124,7 +127,7 @@ class CodeAskBrowser(private val project: Project) {
                     }
                 }
             }, browser.cefBrowser)
-            
+
             // 监听IDE主题变更
             ApplicationManager.getApplication().messageBus.connect().subscribe(
                 LafManagerListener.TOPIC,
@@ -134,7 +137,7 @@ class CodeAskBrowser(private val project: Project) {
                     }
                 }
             )
-            
+
             // 加载主页面
             val url = "http://$DOMAIN_NAME/index.html"
             LOG.info("Loading URL: $url")
@@ -143,7 +146,7 @@ class CodeAskBrowser(private val project: Project) {
             LOG.error("Error initializing CodeAskBrowser", e)
         }
     }
-    
+
     /**
      * 初始化JS通道
      */
@@ -151,7 +154,7 @@ class CodeAskBrowser(private val project: Project) {
         try {
             if (jsChannel == null) {
                 LOG.info("Initializing JS channel")
-                jsChannel = JBCefJSQuery.create(browser as JBCefBrowser)
+                jsChannel = JBCefJSQuery.create((browser as JBCefBrowserBase?)!!)
                 setupJavaScriptBridge()
                 LOG.info("JS channel initialized")
             }
@@ -159,7 +162,7 @@ class CodeAskBrowser(private val project: Project) {
             LOG.error("Failed to initialize JS channel", e)
         }
     }
-    
+
     /**
      * 注入JavaScript接口
      */
@@ -170,7 +173,7 @@ class CodeAskBrowser(private val project: Project) {
                 LOG.warn("JS channel not initialized, skipping injectJavascriptInterface")
                 return
             }
-            
+
             // 创建JavaScript桥接代码
             val script = """
                 // 确保只定义一次sendToIde函数
@@ -219,17 +222,16 @@ class CodeAskBrowser(private val project: Project) {
                     window.init();
                 }
             """.trimIndent()
-            
+
             // 执行脚本
-            browser.executeJavaScriptAsync(script)
-            
+
             // 发送一个测试消息
             sendToWeb("bridge_ready", mapOf("timestamp" to System.currentTimeMillis()))
         } catch (e: Exception) {
             LOG.error("Error injecting JavaScript interface", e)
         }
     }
-    
+
     /**
      * 向Web页面发送消息
      */
@@ -237,7 +239,7 @@ class CodeAskBrowser(private val project: Project) {
         try {
             // 确保JS通道已初始化
             if (jsChannel == null) return
-            
+
             val jsonData = Gson().toJson(mapOf("type" to type, "data" to data))
             val script = """
                 if (window.receiveFromIde) {
@@ -248,7 +250,7 @@ class CodeAskBrowser(private val project: Project) {
                     }
                 }
             """.trimIndent()
-            
+
             // 使用新的API执行脚本
             coroutineScope.launch {
                 try {
@@ -261,60 +263,76 @@ class CodeAskBrowser(private val project: Project) {
             LOG.error("Error sending message to web", e)
         }
     }
-    
+
+    /**
+     * 检测是否为暗色主题
+     */
+    private fun isDarkTheme(): Boolean {
+        return try {
+            val scheme = EditorColorsManager.getInstance().globalScheme
+            val bgColor: Color = scheme.getDefaultBackground()
+            val hsb: FloatArray = Color.RGBtoHSB(bgColor.getRed(), bgColor.getGreen(), bgColor.getBlue(), null)
+            val brightness = hsb[2] // 亮度值（0.0-1.0）
+            brightness < 0.5 // 阈值可根据需求调整
+        } catch (e: Exception) {
+            false // 默认使用亮色主题
+        }
+    }
+
     /**
      * 发送当前主题信息
      */
     private fun sendThemeInfo() {
         // 检测当前IDE主题是否为暗色
         val isDarkTheme = isDarkTheme()
-        val themeName = LafManager.getInstance().currentLookAndFeel.name
-        LOG.info("当前IDE主题: $themeName, 是否为暗色: $isDarkTheme")
         
-        sendToWeb("themeChanged", mapOf(
-            "isDark" to isDarkTheme,
-            "themeName" to themeName
-        ))
-    }
-    
-    /**
-     * 检测是否为暗色主题
-     */
-    private fun isDarkTheme(): Boolean {
-        return try {
-            val lafManager = LafManager.getInstance()
-            com.intellij.util.ui.UIUtil.isUnderDarcula() || 
-                lafManager.currentLookAndFeel.name.contains("Dark", ignoreCase = true)
+        // 安全地获取主题信息
+        val themeName = try {
+            // 使用更安全的方法获取主题信息
+            val colorScheme = EditorColorsManager.getInstance().globalScheme
+            colorScheme.name ?: "Unknown Theme"
         } catch (e: Exception) {
-            false // 默认使用亮色主题
+            LOG.warn("无法获取主题名称：${e.message}")
+            "Unknown Theme"
         }
+
+        LOG.info("当前IDE主题: $themeName, 是否为暗色: $isDarkTheme")
+
+        sendToWeb(
+            "themeChanged", mapOf(
+                "isDark" to isDarkTheme,
+                "themeName" to themeName
+            )
+        )
     }
-    
+
     /**
      * 刷新文件解释
      */
     fun refreshExplanation(filePath: String) {
         try {
             LOG.info("刷新文件解释: $filePath")
-            
+
             // 确保JS通道已初始化
             if (jsChannel == null) return
-            
+
             val dataService = CodeAskDataService.getInstance(project)
             dataService.loadData()
-            
+
             val fileExplanations = dataService.getFileExplanation(filePath)
-            
+
             // 检查解释数据是否为空
             if (fileExplanations == null || fileExplanations.isEmpty()) {
                 LOG.warn("文件 $filePath 没有可用的解释")
-                sendToWeb("fileExplanation", mapOf(
-                    "filePath" to filePath,
-                    "explanations" to emptyList<Any>()
-                ))
+                sendToWeb(
+                    "fileExplanation", mapOf(
+                        "filePath" to filePath,
+                        "explanations" to emptyList<Any>()
+                    )
+                )
                 return
             }
-            
+
             // 根据数据类型采取不同的处理方式
             val processedExplanations = when (fileExplanations) {
                 is Map<*, *> -> {
@@ -326,35 +344,43 @@ class CodeAskBrowser(private val project: Project) {
                         )
                     }
                 }
+
                 is List<*> -> {
                     // 已经是列表，直接使用
                     fileExplanations
                 }
+
                 else -> {
                     // 未知类型，转换为字符串作为单个项
-                    listOf(mapOf(
-                        "first" to "代码解释",
-                        "second" to fileExplanations.toString()
-                    ))
+                    listOf(
+                        mapOf(
+                            "first" to "代码解释",
+                            "second" to fileExplanations.toString()
+                        )
+                    )
                 }
             }
-            
+
             // 发送处理后的解释数据到Web页面
-            sendToWeb("fileExplanation", mapOf(
-                "filePath" to filePath,
-                "explanations" to processedExplanations
-            ))
-            
+            sendToWeb(
+                "fileExplanation", mapOf(
+                    "filePath" to filePath,
+                    "explanations" to processedExplanations
+                )
+            )
+
             LOG.info("已发送文件解释数据到Web页面")
         } catch (e: Exception) {
             LOG.error("刷新文件解释时发生错误", e)
             // 发送错误信息到Web页面
-            sendToWeb("error", mapOf(
-                "message" to "加载文件解释失败: ${e.message}"
-            ))
+            sendToWeb(
+                "error", mapOf(
+                    "message" to "加载文件解释失败: ${e.message}"
+                )
+            )
         }
     }
-    
+
     /**
      * 在当前编辑器中搜索代码
      */
@@ -362,10 +388,12 @@ class CodeAskBrowser(private val project: Project) {
         try {
             // 确保搜索文本不为空
             if (searchText.isBlank() || jsChannel == null) {
-                sendToWeb("searchResult", mapOf(
-                    "success" to false,
-                    "message" to "搜索文本为空"
-                ))
+                sendToWeb(
+                    "searchResult", mapOf(
+                        "success" to false,
+                        "message" to "搜索文本为空"
+                    )
+                )
                 return
             }
 
@@ -374,15 +402,17 @@ class CodeAskBrowser(private val project: Project) {
                     // 获取当前编辑器
                     val fileEditorManager = FileEditorManager.getInstance(project)
                     val editor = fileEditorManager.selectedTextEditor
-                    
+
                     if (editor == null) {
-                        sendToWeb("searchResult", mapOf(
-                            "success" to false,
-                            "message" to "没有活动的编辑器"
-                        ))
+                        sendToWeb(
+                            "searchResult", mapOf(
+                                "success" to false,
+                                "message" to "没有活动的编辑器"
+                            )
+                        )
                         return@invokeLater
                     }
-                    
+
                     // 创建查找模型
                     val findManager = FindManager.getInstance(project)
                     val findModel = FindModel().apply {
@@ -392,18 +422,18 @@ class CodeAskBrowser(private val project: Project) {
                         isRegularExpressions = false
                         isGlobal = true
                     }
-                    
+
                     // 执行搜索
                     val document = editor.document
                     val startOffset = editor.caretModel.offset
-                    
+
                     val result = findManager.findString(
-                        document.charsSequence, 
+                        document.charsSequence,
                         startOffset,
                         findModel,
                         editor.virtualFile
                     )
-                    
+
                     if (result.isStringFound) {
                         handleSearchSuccess(editor, fileEditorManager, result)
                     } else {
@@ -414,7 +444,7 @@ class CodeAskBrowser(private val project: Project) {
                             findModel,
                             editor.virtualFile
                         )
-                        
+
                         if (resultFromStart.isStringFound) {
                             handleSearchSuccess(editor, fileEditorManager, resultFromStart)
                         } else {
@@ -426,30 +456,34 @@ class CodeAskBrowser(private val project: Project) {
                                 findModel,
                                 editor.virtualFile
                             )
-                            
+
                             if (partialResult.isStringFound) {
                                 handleSearchSuccess(editor, fileEditorManager, partialResult)
                             } else {
-                                sendToWeb("searchResult", mapOf(
-                                    "success" to false,
-                                    "message" to "未找到匹配项"
-                                ))
+                                sendToWeb(
+                                    "searchResult", mapOf(
+                                        "success" to false,
+                                        "message" to "未找到匹配项"
+                                    )
+                                )
                             }
                         }
                     }
                 } catch (e: Exception) {
                     LOG.error("Error during code search", e)
-                    sendToWeb("searchResult", mapOf(
-                        "success" to false,
-                        "message" to "搜索过程中发生错误: ${e.message}"
-                    ))
+                    sendToWeb(
+                        "searchResult", mapOf(
+                            "success" to false,
+                            "message" to "搜索过程中发生错误: ${e.message}"
+                        )
+                    )
                 }
             }
         } catch (e: Exception) {
             LOG.error("Error initiating code search", e)
         }
     }
-    
+
     // 新增处理搜索成功的辅助函数
     private fun handleSearchSuccess(
         editor: Editor,
@@ -460,53 +494,57 @@ class CodeAskBrowser(private val project: Project) {
         editor.caretModel.moveToOffset(result.startOffset)
         editor.selectionModel.setSelection(result.startOffset, result.endOffset)
         editor.scrollingModel.scrollToCaret(ScrollType.CENTER)
-        
+
         // 确保编辑器获得焦点
         fileEditorManager.openFile(editor.virtualFile, true)
-        
-        sendToWeb("searchResult", mapOf(
-            "success" to true,
-            "message" to "找到匹配项"
-        ))
+
+        sendToWeb(
+            "searchResult", mapOf(
+                "success" to true,
+                "message" to "找到匹配项"
+            )
+        )
     }
-    
+
     /**
      * 设置JavaScript桥接
      */
     private fun setupJavaScriptBridge() {
         // 确保JS通道已初始化
         val channel = jsChannel ?: return
-        
+
         channel.addHandler { message: String? ->
             if (message != null) {
                 try {
                     // 记录接收到的消息，用于调试
                     LOG.info("Received message from web: $message")
-                    
+
                     // 特殊消息类型直接处理
                     if (message == "bridge_test") {
                         sendToWeb("bridge_test_response", mapOf("success" to true))
                         return@addHandler null
                     }
-                    
+
                     // 尝试解析为JSON
                     try {
                         val json = JsonParser.parseString(message).asJsonObject
-                        
+
                         if (json.has("type") && json.has("data")) {
                             val messageType = json.get("type").asString
                             val data = json.get("data").asJsonObject
-                            
+
                             when (messageType) {
                                 "searchInCode" -> {
                                     LOG.info("Processing searchInCode request")
                                     val codeText = data.get("code").asString
                                     searchInCurrentEditor(codeText)
                                 }
+
                                 "getFileExplanation" -> {
                                     val filePath = data.get("path").asString
                                     refreshExplanation(filePath)
                                 }
+
                                 "ready" -> {
                                     // Web页面已准备好，可以发送初始数据
                                     val currentFile = FileEditorManager.getInstance(project).selectedFiles.firstOrNull()
@@ -515,9 +553,11 @@ class CodeAskBrowser(private val project: Project) {
                                     }
                                     sendToWeb("test_response", mapOf("message" to "IDE已收到准备就绪消息"))
                                 }
+
                                 "bridge_initialized" -> {
                                     sendToWeb("bridge_confirmed", mapOf("timestamp" to System.currentTimeMillis()))
                                 }
+
                                 else -> {
                                     LOG.warn("Unhandled message type: $messageType")
                                 }
@@ -526,16 +566,20 @@ class CodeAskBrowser(private val project: Project) {
                     } catch (e: Exception) {
                         LOG.error("Error parsing JSON message: $message", e)
                         // 发送错误信息回前端
-                        sendToWeb("error", mapOf(
-                            "message" to "消息处理失败: ${e.message}"
-                        ))
+                        sendToWeb(
+                            "error", mapOf(
+                                "message" to "消息处理失败: ${e.message}"
+                            )
+                        )
                     }
                 } catch (e: Exception) {
                     LOG.error("Failed to handle JS message", e)
                     // 发送错误信息回前端
-                    sendToWeb("error", mapOf(
-                        "message" to "消息处理失败: ${e.message}"
-                    ))
+                    sendToWeb(
+                        "error", mapOf(
+                            "message" to "消息处理失败: ${e.message}"
+                        )
+                    )
                 }
             }
             null
@@ -550,7 +594,7 @@ class CodeAskSchemeHandlerFactory : CefSchemeHandlerFactory {
     companion object {
         private val LOG = Logger.getInstance(CodeAskSchemeHandlerFactory::class.java)
     }
-    
+
     override fun create(
         browser: CefBrowser?,
         frame: CefFrame?,
@@ -568,7 +612,7 @@ class CodeAskSchemeHandlerFactory : CefSchemeHandlerFactory {
 class CodeAskResourceHandler : CefResourceHandler {
     companion object {
         private val LOG = Logger.getInstance(CodeAskResourceHandler::class.java)
-        
+
         // 默认HTML内容
         private const val DEFAULT_HTML = """
             <!DOCTYPE html>
@@ -613,21 +657,21 @@ class CodeAskResourceHandler : CefResourceHandler {
             </html>
         """
     }
-    
+
     private var inputStream: InputStream? = null
     private var mimeType: String = "text/html"
     private var processed = false
-    
+
     override fun processRequest(request: CefRequest?, callback: CefCallback?): Boolean {
         processed = true
         val url = request?.url ?: return false
-        
+
         LOG.info("Processing request for URL: $url")
-        
+
         try {
             // 转换URL到资源路径
             val resourcePath = url.replace("http://app/", "webview/")
-            
+
             // 特殊处理根路径请求
             if (url == "http://app/" || url.endsWith("/")) {
                 val indexResource = javaClass.classLoader.getResource("webview/index.html")
@@ -638,12 +682,12 @@ class CodeAskResourceHandler : CefResourceHandler {
                     return true
                 }
             }
-            
+
             val resource = javaClass.classLoader.getResource(resourcePath)
-            
+
             if (resource != null) {
                 inputStream = resource.openStream()
-                
+
                 // 设置MIME类型
                 mimeType = when {
                     url.endsWith(".css") -> "text/css"
@@ -719,7 +763,7 @@ class CodeAskResourceHandler : CefResourceHandler {
                     return false
                 }
             }
-            
+
             callback?.Continue()
             return true
         } catch (e: Exception) {
@@ -727,11 +771,11 @@ class CodeAskResourceHandler : CefResourceHandler {
             return false
         }
     }
-    
+
     override fun getResponseHeaders(response: CefResponse?, responseLength: IntRef?, redirectUrl: StringRef?) {
         response?.mimeType = mimeType
         response?.status = 200
-        
+
         inputStream?.let {
             try {
                 responseLength?.set(it.available())
@@ -743,17 +787,22 @@ class CodeAskResourceHandler : CefResourceHandler {
             responseLength?.set(0)
         }
     }
-    
-    override fun readResponse(dataOut: ByteArray?, bytesToRead: Int, bytesRead: IntRef?, callback: CefCallback?): Boolean {
+
+    override fun readResponse(
+        dataOut: ByteArray?,
+        bytesToRead: Int,
+        bytesRead: IntRef?,
+        callback: CefCallback?
+    ): Boolean {
         val stream = inputStream ?: return false
-        
+
         return try {
             val available = stream.available()
-            
+
             if (available > 0) {
                 val toRead = minOf(available, bytesToRead)
                 val actualRead = stream.read(dataOut, 0, toRead)
-                
+
                 bytesRead?.set(actualRead)
                 true
             } else {
@@ -766,7 +815,7 @@ class CodeAskResourceHandler : CefResourceHandler {
             false
         }
     }
-    
+
     override fun cancel() {
         inputStream?.close()
         inputStream = null

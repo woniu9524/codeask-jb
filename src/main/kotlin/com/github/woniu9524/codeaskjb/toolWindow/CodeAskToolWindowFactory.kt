@@ -11,8 +11,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
-import com.intellij.ide.ui.LafManager
-import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
 
@@ -57,7 +55,7 @@ class CodeAskToolWindowFactory : ToolWindowFactory {
     /**
      * 代码解释面板 - 使用JCEF浏览器实现
      */
-    class CodeAskPanel(private val project: Project) : SimpleToolWindowPanel(true, true), Disposable {
+    class CodeAskPanel(project: Project) : SimpleToolWindowPanel(true, true), Disposable {
         private val browser = CodeAskBrowser(project)
         private var currentFile: VirtualFile? = null
         

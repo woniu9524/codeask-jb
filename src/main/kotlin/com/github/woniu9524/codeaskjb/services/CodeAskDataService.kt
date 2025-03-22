@@ -10,6 +10,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileEvent
 import com.intellij.openapi.vfs.VirtualFileListener
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.impl.BulkVirtualFileListenerAdapter
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.nio.file.Paths
@@ -32,13 +33,15 @@ class CodeAskDataService(private val project: Project) {
         loadData()
         
         // 监听文件变化，当.codeaskdata文件变更时重新加载数据
-        VirtualFileManager.getInstance().addVirtualFileListener(object : VirtualFileListener {
-            override fun contentsChanged(event: VirtualFileEvent) {
-                if (event.file == dataFile) {
-                    loadData()
+        project.messageBus.connect().subscribe(VirtualFileManager.VFS_CHANGES, 
+            BulkVirtualFileListenerAdapter(object : VirtualFileListener {
+                override fun contentsChanged(event: VirtualFileEvent) {
+                    if (event.file == dataFile) {
+                        loadData()
+                    }
                 }
-            }
-        }, project)
+            })
+        )
     }
     
     /**
@@ -96,15 +99,7 @@ class CodeAskDataService(private val project: Project) {
         
         return result
     }
-    
-    /**
-     * 获取所有插件名称
-     * 
-     * @return 插件名称列表
-     */
-    fun getAllPluginNames(): List<String> {
-        return codeAskData?.plugins?.values?.map { it.pluginName } ?: emptyList()
-    }
+
     
     companion object {
         /**
