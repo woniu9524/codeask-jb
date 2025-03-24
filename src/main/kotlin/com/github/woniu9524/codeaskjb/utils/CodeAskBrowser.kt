@@ -224,6 +224,13 @@ class CodeAskBrowser(private val project: Project) {
             """.trimIndent()
 
             // 执行脚本
+            coroutineScope.launch {
+                try {
+                    browser.executeJavaScript(script)
+                } catch (e: Exception) {
+                    LOG.error("Error executing JavaScript script", e)
+                }
+            }
 
             // 发送一个测试消息
             sendToWeb("bridge_ready", mapOf("timestamp" to System.currentTimeMillis()))
